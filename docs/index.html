@@ -938,6 +938,99 @@
         });
     }
 
+
+    function uniqueList(list) {
+      return [...new Set(list.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];
+    }
+
+    function plantCandidates(unit) {
+      const area = Number(unit.area_privativa || 0);
+      const garden = Number(unit.garden || 0);
+      const candidates = [];
+
+      if (unit.planta) candidates.push(unit.planta);
+
+      if (garden > 0) {
+        candidates.push(
+          "assets/plants/planta-40-75-quintal.png",
+          "assets/plants/planta-40-75-quintal.jpg",
+          "assets/plants/planta-40-75-garden.png",
+          "assets/plants/planta-40-75-garden.jpg",
+          "assets/plants/planta-40-75-jardim.png",
+          "assets/plants/planta-40-75-jardim.jpg",
+          "assets/plants/40-75-quintal.png",
+          "assets/plants/40-75-quintal.jpg",
+          "assets/plants/area-40-75-quintal.png",
+          "assets/plants/area-40-75-quintal.jpg"
+        );
+      }
+
+      if (Math.abs(area - 54.04) < 0.35) {
+        candidates.push(
+          "assets/plants/planta-54-04.png",
+          "assets/plants/planta-54-04.jpg",
+          "assets/plants/54-04.png",
+          "assets/plants/54-04.jpg",
+          "assets/plants/area-54-04.png",
+          "assets/plants/area-54-04.jpg",
+          "assets/plants/planta-54,04.png",
+          "assets/plants/planta-54,04.jpg"
+        );
+      }
+
+      candidates.push(
+        "assets/plants/planta-40-75.png",
+        "assets/plants/planta-40-75.jpg",
+        "assets/plants/40-75.png",
+        "assets/plants/40-75.jpg",
+        "assets/plants/area-40-75.png",
+        "assets/plants/area-40-75.jpg",
+        "assets/plants/planta-40,75.png",
+        "assets/plants/planta-40,75.jpg"
+      );
+
+      return uniqueList(candidates);
+    }
+
+    function missingPlantPlaceholder(unit) {
+      const label = `Planta ${unit.id || ""}`.trim();
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620">
+          <rect width="900" height="620" fill="#fbf7ec"/>
+          <rect x="42" y="42" width="816" height="536" rx="34" fill="#ffffff" stroke="#d8e0d4" stroke-width="3"/>
+          <text x="450" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#1f4d2c">${label}</text>
+          <text x="450" y="322" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#4a5b50">Imagem da planta não encontrada</text>
+          <text x="450" y="360" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#7d8c81">Confira o nome do arquivo em assets/plants/</text>
+        </svg>
+      `;
+      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    }
+
+    function nextPlantFallback(img) {
+      const raw = img.dataset.fallbacks || "";
+      const list = raw ? raw.split("|").filter(Boolean) : [];
+      const next = list.shift();
+
+      if (next) {
+        img.dataset.fallbacks = list.join("|");
+        img.src = next;
+        return;
+      }
+
+      img.onerror = null;
+      img.src = missingPlantPlaceholder({ id: img.dataset.unitId || "" });
+      const link = img.closest(".unit-plant");
+      if (link) {
+        link.dataset.plant = img.src;
+        link.classList.add("plant-missing");
+      }
+    }
+
+    function syncPlantLightboxSource(img) {
+      const link = img.closest(".unit-plant");
+      if (link) link.dataset.plant = img.currentSrc || img.src;
+    }
+
     function renderCard(unit) {
       const gardenRow = unit.garden > 0
         ? `<div class="feature-grid"><div class="feature-box garden full"><small>Jardim privativo</small><strong>${unit.garden.toLocaleString("pt-BR")} m²</strong></div></div>`
@@ -945,8 +1038,15 @@
 
       return `
         <article class="unit-card">
-          <a class="unit-plant" href="#planta-${unit.id}" data-plant="${unit.planta}">
-            <img src="${unit.planta}" alt="Planta ${unit.tipologia_curta} - ${unit.area_privativa} m²" loading="lazy">
+          <a class="unit-plant" href="#planta-${unit.id}" data-plant="${plantCandidates(unit)[0]}">
+            <img
+              src="${plantCandidates(unit)[0]}"
+              data-unit-id="${unit.id}"
+              data-fallbacks="${plantCandidates(unit).slice(1).join('|')}"
+              alt="Planta ${unit.tipologia_curta} - ${unit.area_privativa} m²"
+              loading="lazy"
+              onload="syncPlantLightboxSource(this)"
+              onerror="nextPlantFallback(this)">
           </a>
           <div class="unit-copy">
             <div class="unit-topbar">
@@ -1030,7 +1130,7 @@
     }
 
     function renderBlocoFilter() {
-      const blocos = [...new Set(state.units.map((unit) => unit.bloco))].sort();
+      const blocos = [...new Set(state.units.map((unit) => unit.bloco))].sort((a, b) => Number(a) - Number(b));
       blocoFilterEl.innerHTML = [
         '<button class="filter-chip active" data-filter="bloco" data-value="all">Todos</button>',
         ...blocos.map((bloco) => `<button class="filter-chip" data-filter="bloco" data-value="${bloco}">Bloco ${bloco}</button>`)
@@ -1038,7 +1138,7 @@
     }
 
     function renderColunaFilter() {
-      const colunas = [...new Set(state.units.map((unit) => unit.coluna))].sort();
+      const colunas = [...new Set(state.units.map((unit) => unit.coluna))].sort((a, b) => Number(a) - Number(b));
       colunaFilterEl.innerHTML = [
         '<button class="filter-chip active" data-filter="coluna" data-value="all">Todas</button>',
         ...colunas.map((coluna) => `<button class="filter-chip" data-filter="coluna" data-value="${coluna}">Coluna ${coluna}</button>`)
@@ -1243,10 +1343,17 @@
     async function init() {
       await resolveCorretor();
       const response = await fetch("data/units.json");
-      state.units = await response.json();
+      if (!response.ok) throw new Error(`Falha ao carregar data/units.json: ${response.status}`);
+      const loadedUnits = await response.json();
+      if (!Array.isArray(loadedUnits)) throw new Error("data/units.json precisa ser uma lista de unidades.");
+      state.units = loadedUnits.filter((unit) => unit && unit.id && Number(unit.valor_total) > 0);
+
+      if (!state.units.length) {
+        throw new Error("Nenhuma unidade valida encontrada em data/units.json.");
+      }
 
       // Setup price range
-      const prices = state.units.map((u) => u.valor_total);
+      const prices = state.units.map((u) => Number(u.valor_total));
       const minPrice = Math.floor(Math.min(...prices) / 1000) * 1000;
       const maxPrice = Math.ceil(Math.max(...prices) / 1000) * 1000;
       priceRangeEl.min = minPrice;
@@ -1268,9 +1375,10 @@
     init().catch((error) => {
       cardsEl.innerHTML = "";
       emptyEl.style.display = "block";
-      emptyEl.textContent = "Nao foi possivel carregar os dados das unidades.";
+      emptyEl.textContent = "Nao foi possivel carregar os dados das unidades. Confira se data/units.json existe, esta completo e e um JSON valido.";
       console.error(error);
     });
   </script>
 </body>
 </html>
+
